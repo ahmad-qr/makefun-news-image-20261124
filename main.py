@@ -4,7 +4,7 @@
 No network. Copies the PNG the repository holds, then checks the copy:
 same byte size as the source, a valid PNG signature, and 1024x1024 pixels.
 """
-import hashlib, shutil, sys
+import hashlib, shutil, struct, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -41,13 +41,14 @@ def run():
     if TARGET.stat().st_size != SOURCE.stat().st_size:
         return fail("output size differs from source")
     with TARGET.open("rb") as handle:
-        if handle.read(8) != PNG_MAGIC:
-            return fail("output lacks a PNG signature")
-    from PIL import Image
-
-    with Image.open(TARGET) as picture:
-        if picture.size != (1024, 1024):
-            return fail(f"unexpected dimensions: {picture.size}")
+        header = handle.read(33)
+    if header[:8] != PNG_MAGIC:
+        return fail("output lacks a PNG signature")
+    if header[12:16] != b"IHDR":
+        return fail("output lacks a PNG IHDR chunk")
+    width, height = struct.unpack(">II", header[16:24])
+    if (width, height) != (1024, 1024):
+        return fail(f"unexpected dimensions: {width}x{height}")
     print(f"wrote {TARGET}: {TARGET.stat().st_size} bytes, sha256 {digest(TARGET)}")
     return 0
 

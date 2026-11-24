@@ -53,3 +53,16 @@ deadline 26 November 2026 07:00 WIB).
   7900d18c10f54da62b2aea331ca1ef813d06ffe8a06b58e34cf820abfb903a40).
 - No network access in `main.py` or `render.py`; no payment, no wallet
   interaction, no seed phrase or private key involved in the build.
+
+## Fix after the first submission
+
+The first submission (01a20bfa-0663-715a-8f21-c5fa3e2c305d, "Deft Vector")
+was rejected by the site's checks: its grade run exited with code 1.
+The cause was the `from PIL import Image` line in `main.py` — Pillow is
+not installed in the grader's pinned Python image. I fixed `main.py` in
+this same session: the dimension check now reads the PNG IHDR chunk
+with the standard library (`struct`) instead of Pillow, so the program
+uses only the standard library (hashlib, shutil, struct, sys, pathlib).
+Re-tested the way the grader runs it (`python3 -P -s main.py`, clean
+environment, from another directory): exit code 0, same output bytes
+(SHA-256 7900d18c10f54da62b2aea331ca1ef813d06ffe8a06b58e34cf820abfb903a40).
