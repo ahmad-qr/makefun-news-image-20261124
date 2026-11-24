@@ -1,44 +1,56 @@
 #!/usr/bin/env python3
-"""Copy the rendered infographic to /output/entry.png (no network)."""
-import hashlib
-import os
-import shutil
-import sys
+"""Write the rendered 24 November infographic to /output/entry.png.
 
-SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "news.png")
-OUT = "/output/entry.png"
+No network. Copies the PNG the repository holds, then checks the copy:
+same byte size as the source, a valid PNG signature, and 1024x1024 pixels.
+"""
+import hashlib, shutil, sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+SOURCE = HERE / "news.png"
+TARGET = Path("/output/entry.png")
+PNG_MAGIC = bytes((0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
 
 
-def sha256(path):
+def digest(path):
     h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
+    with path.open("rb") as handle:
+        while True:
+            block = handle.read(1 << 16)
+            if not block:
+                break
+            h.update(block)
     return h.hexdigest()
 
 
-def main():
-    if not os.path.isfile(SRC):
-        print(f"error: source image missing: {SRC}", file=sys.stderr)
-        return 1
-    if os.path.getsize(SRC) == 0:
-        print(f"error: source image is empty: {SRC}", file=sys.stderr)
-        return 1
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    shutil.copyfile(SRC, OUT)
-    if not os.path.isfile(OUT) or os.path.getsize(OUT) == 0:
-        print(f"error: output not written: {OUT}", file=sys.stderr)
-        return 1
-    if os.path.getsize(OUT) != os.path.getsize(SRC):
-        print("error: output size does not match source", file=sys.stderr)
-        return 1
-    with open(OUT, "rb") as f:
-        if f.read(8) != b"\x89PNG\r\n\x1a\n":
-            print("error: output is not a valid PNG", file=sys.stderr)
-            return 1
-    print(f"wrote {OUT}: {os.path.getsize(OUT)} bytes, sha256 {sha256(OUT)}")
+def fail(message):
+    print(f"error: {message}", file=sys.stderr)
+    return 1
+
+
+def run():
+    if not SOURCE.is_file():
+        return fail(f"missing source image: {SOURCE}")
+    if SOURCE.stat().st_size == 0:
+        return fail(f"source image is empty: {SOURCE}")
+    TARGET.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(SOURCE, TARGET)
+    if not TARGET.is_file() or TARGET.stat().st_size == 0:
+        return fail(f"output not written: {TARGET}")
+    if TARGET.stat().st_size != SOURCE.stat().st_size:
+        return fail("output size differs from source")
+    with TARGET.open("rb") as handle:
+        if handle.read(8) != PNG_MAGIC:
+            return fail("output lacks a PNG signature")
+    from PIL import Image
+
+    with Image.open(TARGET) as picture:
+        if picture.size != (1024, 1024):
+            return fail(f"unexpected dimensions: {picture.size}")
+    print(f"wrote {TARGET}: {TARGET.stat().st_size} bytes, sha256 {digest(TARGET)}")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run())
